@@ -1,10 +1,10 @@
 #!/bin/bash
 # ═══════════════════════════════════════════════════════════════
-#  ARVIN REPUBLIC - Quantum Tunnel Protocol v1.0 STABLE
-#  ChaCha20-Poly1305 | Auto-Detect | QUIC Mimic | Fragment Chaos
+#  ARVIN REPUBLIC - Quantum Tunnel Protocol v2.0 FINAL
+#  ChaCha20-Poly1305 | Auto-Detect | TCP Bridge | QUIC Mimic
 #  Github: https://github.com/bingx3023-cyber/Arvin-Republic
-#  Install: bash Install.sh
-#  Panel:   arvin-tun
+#  Install: bash <(curl -s https://raw.githubusercontent.com/bingx3023-cyber/Arvin-Republic/main/Install.sh)
+#  Panel: arvin-tun
 # ═══════════════════════════════════════════════════════════════
 
 clear
@@ -40,54 +40,54 @@ cat << 'BANNER'
 ║  ██║  ██║██║  ██║ ╚████╔╝ ██║██║ ╚████║                ║
 ║  ╚═╝  ╚═╝╚═╝  ╚═╝  ╚═══╝  ╚═╝╚═╝  ╚═══╝                ║
 ║                                                          ║
-║     ⚡ QUANTUM FRAGMENT PROTOCOL v1.0 ⚡                 ║
-║     ChaCha20-Poly1305 | Auto-Detect | QUIC Mimic        ║
+║     ⚡ QUANTUM FRAGMENT PROTOCOL v2.0 ⚡                 ║
+║     ChaCha20 | Auto-Detect | TCP/UDP Bridge | QUIC      ║
 ║                                                          ║
 ╚══════════════════════════════════════════════════════════╝
 BANNER
 echo -e "${N}"
 
-echo -e "${W}Welcome to ARVIN Quantum Fragment Protocol v1.0${N}"
-echo -e "${C}Encryption: ChaCha20-Poly1305 | Obfuscation: QUIC Mimic${N}"
-echo ""
+# ════════════ CHECK ROOT ════════════
+if [[ $EUID -ne 0 ]]; then
+    echo -e "${R}[FATAL] Run as root!${N}"
+    exit 1
+fi
 
-# ════════════ STEP 1: INSTALL SYSTEM PACKAGES ════════════
-echo -e "${G}[1/4] Installing system packages...${N}"
+# ════════════ STEP 1: FIX APT & INSTALL ════════════
+echo -e "${G}[1/5] Installing system packages...${N}"
 
-# رفع قفل‌های apt
+# رفع قفل
 rm -f /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/lib/apt/lists/lock /var/cache/apt/archives/lock 2>/dev/null
 dpkg --configure -a 2>/dev/null
 apt update -y 2>/dev/null
 
-# نصب تک‌تک پکیج‌ها با خطایابی دستی
-for pkg in curl wget openssl jq python3 python3-pip netcat-openbsd iptables dnsutils; do
+# نصب پکیج‌ها
+for pkg in curl wget openssl jq python3 python3-pip netcat-openbsd iptables dnsutils socat; do
     if ! dpkg -s "$pkg" >/dev/null 2>&1; then
-        echo -e "  -> Installing ${Y}$pkg${N}..."
-        apt install -y "$pkg" 2>/dev/null || echo -e "  ${R}[!] Failed: $pkg${N}"
+        echo -e "  -> ${Y}$pkg${N}"
+        apt install -y "$pkg" 2>/dev/null || true
     fi
 done
 
-echo -e "  ${G}[+] System packages OK${N}"
+echo -e "  ${G}[+] Done${N}"
 
-# ════════════ STEP 2: INSTALL PYTHON CRYPTOGRAPHY ════════════
-echo -e "${G}[2/4] Installing Python cryptography...${N}"
+# ════════════ STEP 2: PYTHON CRYPTO ════════════
+echo -e "${G}[2/5] Installing cryptography...${N}"
 
 if python3 -c "from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305" 2>/dev/null; then
     echo -e "  ${G}[+] Already installed${N}"
 else
-    # روش اول: pip با break-system-packages (اوبونتو ۲۴+)
-    pip3 install --break-system-packages cryptography 2>/dev/null && echo -e "  ${G}[+] Installed via pip${N}" || \
-    # روش دوم: pip معمولی
-    pip3 install cryptography 2>/dev/null && echo -e "  ${G}[+] Installed via pip${N}" || \
-    # روش سوم: apt
-    apt install -y python3-cryptography 2>/dev/null && echo -e "  ${G}[+] Installed via apt${N}" || {
-        echo -e "${R}[!] Failed! Run manually: pip3 install --break-system-packages cryptography${N}"
+    pip3 install --break-system-packages cryptography 2>/dev/null || \
+    pip3 install cryptography 2>/dev/null || \
+    apt install -y python3-cryptography 2>/dev/null || {
+        echo -e "${R}[!] Failed! Run: pip3 install --break-system-packages cryptography${N}"
         exit 1
     }
+    echo -e "  ${G}[+] Installed${N}"
 fi
 
-# ════════════ STEP 3: CREATE QUANTUM ENGINE ════════════
-echo -e "${G}[3/4] Building Quantum Engine...${N}"
+# ════════════ STEP 3: CREATE ENGINE ════════════
+echo -e "${G}[3/5] Building Quantum Engine...${N}"
 
 mkdir -p "$ARVIN_DIR" "$CONFIG_DIR" "$LOG_DIR" "$BIN_DIR"
 
@@ -160,106 +160,167 @@ PYEOF
 chmod +x "$ENGINE_PY"
 echo -e "  ${G}[+] Engine ready${N}"
 
-# ════════════ STEP 4: DETECT SERVER LOCATION ════════════
-echo -e "${Y}[*] Detecting server location...${N}"
+# ════════════ STEP 4: DETECT SERVER ════════════
+echo -e "${G}[4/5] Detecting server...${N}"
 
+SERVER=""
 if ping -c 1 -W 1 8.8.8.8 >/dev/null 2>&1; then
     SERVER="FOREIGN"
-    echo -e "${G}[+] Direct internet detected -> FOREIGN SERVER${N}"
+    echo -e "${G}[+] Direct internet -> FOREIGN${N}"
 elif curl -s --max-time 3 https://api.keylead.ir >/dev/null 2>&1; then
     SERVER="IRAN"
-    echo -e "${B}[+] Iran API reachable -> IRAN SERVER${N}"
+    echo -e "${B}[+] Iran API -> IRAN${N}"
 else
-    echo -e "${W}Cannot auto-detect. Select:${N}"
-    echo -e "  ${G}1)${N} Iran Server 🇮🇷"
-    echo -e "  ${B}2)${N} Foreign Server 🌍"
-    read -r c
-    [[ "$c" == "1" ]] && SERVER="IRAN" || SERVER="FOREIGN"
+    # تشخیص بر اساس IP
+    LOCAL_IP=$(hostname -I | awk '{print $1}')
+    if [[ "$LOCAL_IP" =~ ^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.) ]]; then
+        SERVER="IRAN"
+        echo -e "${B}[+] Private IP -> IRAN${N}"
+    else
+        echo -e "${Y}[?] Cannot detect${N}"
+        echo -e "${W}1) Iran  2) Foreign${N}"
+        read -r c
+        [[ "$c" == "1" ]] && SERVER="IRAN" || SERVER="FOREIGN"
+    fi
 fi
 
-# ════════════ STEP 5: CONFIGURE TUNNEL ════════════
-echo -e "${G}[4/4] Configuring tunnel...${N}"
+# ════════════ STEP 5: CONFIGURE ════════════
+echo -e "${G}[5/5] Configuring...${N}"
 
-# تولید کلیدهای رمزنگاری
+# تولید کلید
 KEY=$(openssl rand -base64 32 | tr -d '\n+/=' | head -c 32)
 HMAC=$(openssl rand -hex 32)
 SALT=$(openssl rand -hex 16)
 TOKEN="ARVIN-$(openssl rand -hex 24)"
 
-# ذخیره کلیدها
 echo "${KEY}:${HMAC}:${SALT}:${TOKEN}" > "$KEYS_FILE"
 chmod 600 "$KEYS_FILE"
 echo "$TOKEN" > "$TOKEN_FILE"
 
 if [[ "$SERVER" == "IRAN" ]]; then
-    # کانفیگ سرور ایران
+    # ════════════ IRAN CONFIG ════════════
     echo -ne "${Y}Enter FOREIGN server IP: ${N}"
     read -r REMOTE_IP
-    
+
     cat > "$CONFIG_FILE" << EOF
 {"type":"IRAN","remote_ip":"$REMOTE_IP","local_port":6666,"remote_port":5555,"mode":"listen","key_file":"$KEYS_FILE"}
 EOF
-    
+
+    # سرویس engine (گوش دادن روی 6666)
     cat > /etc/systemd/system/arvin-tunnel.service << SVC
 [Unit]
-Description=ARVIN Quantum Tunnel - Iran
+Description=ARVIN Quantum - Iran Engine
 After=network.target
 [Service]
 Type=simple
 ExecStart=/usr/bin/python3 $ENGINE_PY --mode listen --host 0.0.0.0 --port 6666 --config $CONFIG_FILE
 Restart=always
-RestartSec=5
+RestartSec=3
 [Install]
 WantedBy=multi-user.target
 SVC
 
+    # TCP Bridge (10000 -> 6666)
+    cat > /etc/systemd/system/arvin-bridge.service << BRIDGE
+[Unit]
+Description=ARVIN TCP Bridge
+After=arvin-tunnel.service
+[Service]
+Type=simple
+ExecStart=/usr/bin/socat TCP4-LISTEN:10000,fork,reuseaddr UDP4:127.0.0.1:6666
+Restart=always
+[Install]
+WantedBy=multi-user.target
+BRIDGE
+
+    systemctl daemon-reload
+    systemctl enable arvin-tunnel arvin-bridge 2>/dev/null
+    systemctl restart arvin-tunnel arvin-bridge 2>/dev/null
+
+    echo ""
+    echo -e "${G}╔════════════════════════════════════════╗${N}"
+    echo -e "${G}║     ✅ IRAN TUNNEL INSTALLED!         ║${N}"
+    echo -e "${G}╚════════════════════════════════════════╝${N}"
+    echo -e "${C}🔑 TOKEN: ${W}${TOKEN}${N}"
+    echo -e "${Y}⚠️  COPY THIS TOKEN FOR FOREIGN SERVER!${N}"
+    echo ""
+
 else
-    # کانفیگ سرور خارج
+    # ════════════ FOREIGN CONFIG ════════════
     echo -ne "${Y}Enter IRAN server IP: ${N}"
     read -r REMOTE_IP
-    echo -ne "${Y}Enter TOKEN from Iran server: ${N}"
+    echo -ne "${Y}Enter TOKEN from Iran: ${N}"
     read -r INPUT_TOKEN
     echo "$INPUT_TOKEN" > "$TOKEN_FILE"
-    
+
     cat > "$CONFIG_FILE" << EOF
-{"type":"FOREIGN","remote_ip":"$REMOTE_IP","local_port":5555,"remote_port":6666,"mode":"send","key_file":"$KEYS_FILE"}
+{"type":"FOREIGN","remote_ip":"$REMOTE_IP","local_port":5555,"remote_port":6666,"mode":"listen","key_file":"$KEYS_FILE"}
 EOF
-    
+
+    # سرویس engine (گوش دادن روی 5555)
     cat > /etc/systemd/system/arvin-tunnel.service << SVC
 [Unit]
-Description=ARVIN Quantum Tunnel - Foreign
+Description=ARVIN Quantum - Foreign Engine
 After=network.target
 [Service]
 Type=simple
-ExecStart=/usr/bin/python3 $ENGINE_PY --mode send --host $REMOTE_IP --port 6666 --config $CONFIG_FILE
+ExecStart=/usr/bin/python3 $ENGINE_PY --mode listen --host 0.0.0.0 --port 5555 --config $CONFIG_FILE
 Restart=always
-RestartSec=5
+RestartSec=3
 [Install]
 WantedBy=multi-user.target
 SVC
+
+    # TCP Bridge (10000 -> 5555)
+    cat > /etc/systemd/system/arvin-bridge.service << BRIDGE
+[Unit]
+Description=ARVIN TCP Bridge
+After=arvin-tunnel.service
+[Service]
+Type=simple
+ExecStart=/usr/bin/socat TCP4-LISTEN:10000,fork,reuseaddr UDP4:127.0.0.1:5555
+Restart=always
+[Install]
+WantedBy=multi-user.target
+BRIDGE
+
+    systemctl daemon-reload
+    systemctl enable arvin-tunnel arvin-bridge 2>/dev/null
+    systemctl restart arvin-tunnel arvin-bridge 2>/dev/null
+
+    echo ""
+    echo -e "${G}╔════════════════════════════════════════╗${N}"
+    echo -e "${G}║     ✅ FOREIGN TUNNEL INSTALLED!       ║${N}"
+    echo -e "${G}╚════════════════════════════════════════╝${N}"
 fi
 
-# راه‌اندازی سرویس
-systemctl daemon-reload
-systemctl enable arvin-tunnel 2>/dev/null
-systemctl restart arvin-tunnel 2>/dev/null
+# ════════════ CREATE arvin-tun COMMAND ════════════
+cat > /usr/local/bin/arvin-tun << 'CMD'
+#!/bin/bash
+echo -e "\033[0;36m═══ ARVIN REPUBLIC ═══\033[0m"
+echo ""
+echo "Tunnel: $(systemctl is-active arvin-tunnel 2>/dev/null || echo 'offline')"
+echo "Bridge: $(systemctl is-active arvin-bridge 2>/dev/null || echo 'offline')"
+echo ""
+echo "Ports:"
+ss -tuln 2>/dev/null | grep -E '5555|6666|10000' | awk '{print "  "$1" "$5}'
+echo ""
+echo -e "\033[1;33mToken:\033[0m $(cat /opt/arvin-republic/token 2>/dev/null || echo 'N/A')"
+echo ""
+echo -e "\033[0;32mCommands:\033[0m"
+echo "  systemctl restart arvin-tunnel"
+echo "  systemctl restart arvin-bridge"
+echo "  journalctl -u arvin-tunnel -f"
+CMD
 
-# ایجاد لینک فرمان
-ln -sf "$(readlink -f "$0")" /usr/local/bin/arvin-tun 2>/dev/null
+chmod +x /usr/local/bin/arvin-tun
 
-# ════════════ SUCCESS ════════════
+# ════════════ FINAL STATUS ════════════
 echo ""
-echo -e "${G}╔════════════════════════════════════════════╗${N}"
-echo -e "${G}║                                            ║${N}"
-echo -e "${G}║     ✅ TUNNEL INSTALLED SUCCESSFULLY!      ║${N}"
-echo -e "${G}║                                            ║${N}"
-echo -e "${G}╚════════════════════════════════════════════╝${N}"
+echo -e "${W}═══════════════ STATUS ═══════════════${N}"
+echo -e "Tunnel: ${G}$(systemctl is-active arvin-tunnel 2>/dev/null)${N}"
+echo -e "Bridge: ${G}$(systemctl is-active arvin-bridge 2>/dev/null)${N}"
+echo -e "Token:  ${C}$(cat $TOKEN_FILE)${N}"
+echo -e "${W}════════════════════════════════════════${N}"
 echo ""
-echo -e "${W}Commands:${N}"
-echo -e "  ${Y}arvin-tun${N}           - Open control panel"
-echo -e "  ${Y}arvin-tun status${N}    - Check tunnel status"
-echo -e "  ${Y}arvin-tun restart${N}   - Restart tunnel"
-echo ""
-echo -e "${C}🔑 TOKEN: ${W}${TOKEN}${N}"
-echo -e "${Y}⚠️  SAVE THIS TOKEN! You need it for the other server!${N}"
-echo ""
+echo -e "${Y}Run: arvin-tun${N}"
