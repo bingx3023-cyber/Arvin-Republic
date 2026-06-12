@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ============================================
-# IranExTunnel v3.0 - Professional Tunnel for Iran<->Outside
+# IranExTunnel v3.1 - Professional Tunnel for Iran<->Outside
 # ============================================
 
 set -e
@@ -34,7 +34,7 @@ print_banner() {
     echo "   ██║   ╚██████╔╝██║ ╚████║██║ ╚████║███████╗███████╗██║  ██║██║  ██║   ██║   "
     echo "   ╚═╝    ╚═════╝ ╚═╝  ╚═══╝╚═╝  ╚═══╝╚══════╝╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝   "
     echo -e "${NC}"
-    echo -e "${WHITE}       Professional Iran<->Outside Tunnel Manager v3.0${NC}"
+    echo -e "${WHITE}       Professional Iran<->Outside Tunnel Manager v3.1${NC}"
     echo -e "${CYAN}════════════════════════════════════════════════════════════════════${NC}\n"
 }
 
@@ -73,50 +73,20 @@ check_root() {
 install_dependencies() {
     log "STEP" "Installing all required dependencies..."
     
-    # آپدیت سیستم
-    apt update -qq 2>/dev/null
+    apt update -qq 2>/dev/null || true
     
-    # لیست کامل پیش‌نیازها
     local packages=(
-        socat
-        openssl
-        curl
-        wget
-        net-tools
-        ufw
-        iptables
-        nano
-        htop
-        nload
-        tmux
-        cron
-        gcc
-        make
-        git
+        socat openssl curl wget net-tools ufw iptables
+        nano htop nload tmux cron gcc make git
     )
     
-    local installed=0
-    local failed=0
-    
     for pkg in "${packages[@]}"; do
-        if dpkg -l | grep -q "^ii  $pkg "; then
-            log "INFO" "✅ $pkg already installed"
-            ((installed++))
-        else
-            log "INFO" "📦 Installing $pkg..."
-            if apt install -y "$pkg" -qq 2>/dev/null; then
-                log "INFO" "✅ $pkg installed"
-                ((installed++))
-            else
-                log "WARN" "⚠️  Could not install $pkg (may not be needed)"
-                ((failed++))
-            fi
+        if ! dpkg -l | grep -q "^ii  $pkg "; then
+            log "INFO" "Installing $pkg..."
+            apt install -y "$pkg" -qq 2>/dev/null || log "WARN" "Could not install $pkg"
         fi
     done
     
-    log "INFO" "Dependencies check completed: $installed installed, $failed failed"
-    
-    # نصب ابزارهای خاص از گیت‌هاب
     install_special_tools
 }
 
@@ -126,30 +96,24 @@ install_dependencies() {
 install_special_tools() {
     log "STEP" "Installing special tunneling tools..."
     
-    # نصب bore
     if ! command -v bore &> /dev/null; then
-        log "INFO" "Installing bore..."
         wget -q -O /usr/local/bin/bore https://github.com/ekzhang/bore/releases/latest/download/bore-cli_amd64-unknown-linux-musl
         chmod +x /usr/local/bin/bore
-        log "INFO" "✅ Bore installed"
+        log "INFO" "Bore installed"
     fi
     
-    # نصب chisel
     if ! command -v chisel &> /dev/null; then
-        log "INFO" "Installing chisel..."
         wget -q -O /tmp/chisel.gz https://github.com/jpillora/chisel/releases/latest/download/chisel_linux_amd64.gz
         gunzip -c /tmp/chisel.gz > /usr/local/bin/chisel
         chmod +x /usr/local/bin/chisel
         rm /tmp/chisel.gz
-        log "INFO" "✅ Chisel installed"
+        log "INFO" "Chisel installed"
     fi
     
-    # نصب websocat
     if ! command -v websocat &> /dev/null; then
-        log "INFO" "Installing websocat..."
         wget -q -O /usr/local/bin/websocat https://github.com/vi/websocat/releases/latest/download/websocat_amd64-linux-static
         chmod +x /usr/local/bin/websocat
-        log "INFO" "✅ Websocat installed"
+        log "INFO" "Websocat installed"
     fi
 }
 
@@ -161,79 +125,56 @@ get_user_config() {
     echo -e "${WHITE}              TUNNEL CONFIGURATION SETUP${NC}"
     echo -e "${WHITE}════════════════════════════════════════════════════════════${NC}\n"
     
-    log "STEP" "Please enter tunnel configuration:"
-    
-    # سرور یا کلاینت؟
     echo -e "\n${CYAN}📡 Server Type:${NC}"
     echo "  1) 🇮🇷 IRAN Server (Client mode - connects to outside)"
     echo "  2) 🌍 OUTSIDE Server (Server mode - waits for connection)"
     read -p "👉 Choose [1-2]: " SERVER_TYPE
     
-    # نام تانل
     read -p "🔖 Tunnel Name [tunnel-main]: " TUNNEL_NAME
     TUNNEL_NAME=${TUNNEL_NAME:-tunnel-main}
     
-    # نوع پروتکل
     echo -e "\n${CYAN}🔌 Protocol Type:${NC}"
     echo "  1) TCP Direct (fastest, less stealthy)"
     echo "  2) SSL/TLS (secure, recommended)"  
     echo "  3) WebSocket (most stealthy for strict networks)"
-    echo "  4) HTTP/S (proxy-like)"
-    read -p "👉 Choose [1-4]: " PROTOCOL_TYPE
+    read -p "👉 Choose [1-3]: " PROTOCOL_TYPE
     
     case $PROTOCOL_TYPE in
         1) PROTOCOL="tcp" ;;
         2) PROTOCOL="ssl" ;;
         3) PROTOCOL="websocket" ;;
-        4) PROTOCOL="http" ;;
         *) PROTOCOL="ssl" ;;
     esac
     
-    # پورت
     read -p "🔌 Local Port to listen on [443]: " LOCAL_PORT
     LOCAL_PORT=${LOCAL_PORT:-443}
     
     read -p "🎯 Destination Port on other side [22]: " DEST_PORT
     DEST_PORT=${DEST_PORT:-22}
     
-    # اگر کلاینت هستیم، IP سرور خارج رو بگیر
     if [[ $SERVER_TYPE -eq 2 ]]; then
-        # حالت سرور خارج
-        log "INFO" "Configuring as OUTSIDE Server"
         SERVER_IP=$(curl -s ifconfig.me)
         log "INFO" "Your server IP: $SERVER_IP"
     else
-        # حالت کلاینت ایران
         echo -e "\n${CYAN}🌍 Outside Server Details:${NC}"
         read -p "👉 Outside Server IP: " OUTSIDE_IP
         read -p "👉 Outside Server Port: " OUTSIDE_PORT
     fi
     
-    # توکن احراز هویت
     read -p "🔑 Auth Token [auto-generate]: " AUTH_TOKEN
     if [[ -z "$AUTH_TOKEN" ]]; then
         AUTH_TOKEN=$(openssl rand -hex 16)
     fi
     log "INFO" "Auth Token: $AUTH_TOKEN (save this!)"
     
-    # پایداری بالا
-    echo -e "\n${CYAN}🛡️ Stability Settings (for maximum stability):${NC}"
+    echo -e "\n${CYAN}🛡️ Stability Settings:${NC}"
     read -p "🔄 Auto-restart on failure? [Y/n]: " AUTO_RESTART
     AUTO_RESTART=${AUTO_RESTART:-Y}
-    
-    read -p "📊 Connection keepalive (seconds) [30]: " KEEPALIVE
-    KEEPALIVE=${KEEPALIVE:-30}
-    
-    read -p "🔄 Max retry attempts [unlimited]: " MAX_RETRIES
-    MAX_RETRIES=${MAX_RETRIES:-0}
-    
     read -p "⏱️ Retry interval (seconds) [10]: " RETRY_INTERVAL
     RETRY_INTERVAL=${RETRY_INTERVAL:-10}
     
-    # ذخیره تنظیمات
     mkdir -p "$CONFIG_DIR"
     cat > "$CONFIG_DIR/$TUNNEL_NAME.conf" << EOF
-# IranExTunnel Configuration
 TUNNEL_NAME="$TUNNEL_NAME"
 SERVER_TYPE="$SERVER_TYPE"
 PROTOCOL="$PROTOCOL"
@@ -241,8 +182,6 @@ LOCAL_PORT="$LOCAL_PORT"
 DEST_PORT="$DEST_PORT"
 AUTH_TOKEN="$AUTH_TOKEN"
 AUTO_RESTART="$AUTO_RESTART"
-KEEPALIVE="$KEEPALIVE"
-MAX_RETRIES="$MAX_RETRIES"
 RETRY_INTERVAL="$RETRY_INTERVAL"
 EOF
 
@@ -253,7 +192,7 @@ EOF
         echo "SERVER_IP=\"$SERVER_IP\"" >> "$CONFIG_DIR/$TUNNEL_NAME.conf"
     fi
     
-    log "INFO" "✅ Configuration saved to $CONFIG_DIR/$TUNNEL_NAME.conf"
+    log "INFO" "Configuration saved to $CONFIG_DIR/$TUNNEL_NAME.conf"
 }
 
 # ============================================
@@ -261,47 +200,26 @@ EOF
 # ============================================
 setup_firewall() {
     local port=$1
-    
     log "STEP" "Configuring firewall for port $port..."
     
-    # باز کردن پورت در UFW
-    if command -v ufw &> /dev/null; then
-        ufw allow "$port"/tcp 2>/dev/null || true
-        log "INFO" "✅ Port $port opened in UFW"
-    fi
-    
-    # باز کردن پورت در iptables
-    if command -v iptables &> /dev/null; then
-        iptables -I INPUT -p tcp --dport "$port" -j ACCEPT 2>/dev/null || true
-        log "INFO" "✅ Port $port opened in iptables"
-        
-        # ذخیره تنظیمات iptables برای reboot
-        if command -v iptables-save &> /dev/null; then
-            iptables-save > /etc/iptables/rules.v4 2>/dev/null || true
-        fi
-    fi
-    
-    # بهینه‌سازی شبکه برای پایداری
-    log "STEP" "Optimizing network for stability..."
+    command -v ufw &> /dev/null && ufw allow "$port"/tcp 2>/dev/null || true
+    command -v iptables &> /dev/null && iptables -I INPUT -p tcp --dport "$port" -j ACCEPT 2>/dev/null || true
     
     cat >> /etc/sysctl.conf << EOF
 
-# IranExTunnel Network Optimizations
+# IranExTunnel Optimizations
 net.ipv4.tcp_keepalive_time = 60
 net.ipv4.tcp_keepalive_intvl = 10
 net.ipv4.tcp_keepalive_probes = 5
 net.core.rmem_max = 134217728
 net.core.wmem_max = 134217728
-net.ipv4.tcp_rmem = 4096 87380 134217728
-net.ipv4.tcp_wmem = 4096 65536 134217728
 EOF
-    
     sysctl -p 2>/dev/null || true
-    log "INFO" "✅ Network optimized for stability"
+    log "INFO" "Network optimized for stability"
 }
 
 # ============================================
-# ایجاد سرویس systemd با پایداری بالا
+# ایجاد سرویس systemd
 # ============================================
 create_systemd_service() {
     local tunnel_name=$1
@@ -310,31 +228,25 @@ create_systemd_service() {
     
     source "$CONFIG_DIR/$tunnel_name.conf"
     
-    # ساخت اسکریپت wrapper برای مدیریت مجدد
-    local wrapper_script="/usr/local/bin/tunnel-wrapper-${tunnel_name}.sh"
+    if [[ ! -f "/etc/stunnel/stunnel.pem" ]] && [[ "$PROTOCOL" == "ssl" ]]; then
+        mkdir -p /etc/stunnel
+        openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+            -keyout /etc/stunnel/stunnel.key \
+            -out /etc/stunnel/stunnel.crt \
+            -subj "/C=US/ST=State/L=City/O=Organization/CN=localhost" 2>/dev/null
+        cat /etc/stunnel/stunnel.crt /etc/stunnel/stunnel.key > /etc/stunnel/stunnel.pem
+        chmod 600 /etc/stunnel/stunnel.pem
+    fi
     
     case $PROTOCOL in
         tcp)
             if [[ $SERVER_TYPE -eq 2 ]]; then
-                # سرور خارج
                 exec_start="/usr/bin/socat TCP-LISTEN:${LOCAL_PORT},reuseaddr,fork,keepalive TCP:127.0.0.1:${DEST_PORT}"
             else
-                # کلاینت ایران
                 exec_start="/usr/bin/socat TCP:127.0.0.1:${DEST_PORT} TCP:${OUTSIDE_IP}:${OUTSIDE_PORT},forever,intervall=${RETRY_INTERVAL}"
             fi
             ;;
         ssl)
-            # ساخت گواهی اگر لازم باشه
-            if [[ ! -f "/etc/stunnel/stunnel.pem" ]]; then
-                mkdir -p /etc/stunnel
-                openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-                    -keyout /etc/stunnel/stunnel.key \
-                    -out /etc/stunnel/stunnel.crt \
-                    -subj "/C=US/ST=State/L=City/O=Organization/CN=localhost" 2>/dev/null
-                cat /etc/stunnel/stunnel.crt /etc/stunnel/stunnel.key > /etc/stunnel/stunnel.pem
-                chmod 600 /etc/stunnel/stunnel.pem
-            fi
-            
             if [[ $SERVER_TYPE -eq 2 ]]; then
                 exec_start="/usr/bin/socat OPENSSL-LISTEN:${LOCAL_PORT},reuseaddr,fork,cert=/etc/stunnel/stunnel.pem,verify=0,keepalive TCP:127.0.0.1:${DEST_PORT}"
             else
@@ -348,19 +260,11 @@ create_systemd_service() {
                 exec_start="/usr/local/bin/websocat --binary ws://${OUTSIDE_IP}:${OUTSIDE_PORT} tcp:127.0.0.1:${DEST_PORT} --retry-ws --retry-interval ${RETRY_INTERVAL}"
             fi
             ;;
-        http)
-            if [[ $SERVER_TYPE -eq 2 ]]; then
-                exec_start="/usr/bin/socat TCP-LISTEN:${LOCAL_PORT},reuseaddr,fork,keepalive TCP:127.0.0.1:${DEST_PORT}"
-            else
-                exec_start="/usr/local/bin/chisel client ${OUTSIDE_IP}:${OUTSIDE_PORT} ${LOCAL_PORT}:127.0.0.1:${DEST_PORT}"
-            fi
-            ;;
     esac
     
-    # ایجاد فایل سرویس
     cat > "$service_file" << EOF
 [Unit]
-Description=IranExTunnel - $tunnel_name (Iran<->Outside)
+Description=IranExTunnel - $tunnel_name
 After=network.target network-online.target
 Wants=network-online.target
 
@@ -372,108 +276,61 @@ ExecStartPre=/bin/sleep 2
 Restart=${AUTO_RESTART:+always}
 RestartSec=${RETRY_INTERVAL}
 StartLimitInterval=0
-StartLimitBurst=0
-KillMode=process
-KillSignal=SIGINT
-SendSIGKILL=no
-
-# بهینه‌سازی برای پایداری
 LimitNOFILE=65536
-LimitNPROC=65536
-TasksMax=infinity
-CPUQuota=200%
-MemoryMax=512M
-
-# محافظت در برابر kill شدن
 OOMScoreAdjust=-500
 
 [Install]
 WantedBy=multi-user.target
 EOF
     
-    log "INFO" "✅ Systemd service created: irantunnel-$tunnel_name"
+    log "INFO" "Systemd service created: irantunnel-$tunnel_name"
 }
 
 # ============================================
-# ساخت Watchdog برای پایداری فوق‌العاده
+# نصب واچداگ (بدون خطای crontab)
 # ============================================
-create_watchdog() {
-    log "STEP" "Creating watchdog for maximum stability..."
+install_watchdog() {
+    log "STEP" "Installing watchdog for maximum stability..."
     
     cat > "$WATCHDOG_SCRIPT" << 'EOF'
 #!/bin/bash
-
-WATCHDOG_LOG="/var/log/iranextunnel/watchdog.log"
-CONFIG_DIR="/etc/iranextunnel"
-
-log() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$WATCHDOG_LOG"
-}
-
-# بررسی سلامت هر تانل
-for config in "$CONFIG_DIR"/*.conf; do
-    if [[ -f "$config" ]]; then
-        source "$config"
-        SERVICE_NAME="irantunnel-${TUNNEL_NAME}.service"
-        
-        # بررسی سرویس
-        if systemctl is-active --quiet "$SERVICE_NAME"; then
-            log "✅ $SERVICE_NAME is running"
-        else
-            log "⚠️ $SERVICE_NAME is dead, restarting..."
-            systemctl restart "$SERVICE_NAME"
-            
-            # اگر بازم بالا نیومد، ریستارت کامل
-            sleep 5
-            if ! systemctl is-active --quiet "$SERVICE_NAME"; then
-                log "❌ $SERVICE_NAME failed, force restart..."
-                systemctl stop "$SERVICE_NAME"
-                sleep 2
-                systemctl start "$SERVICE_NAME"
-            fi
-        fi
+for config in /etc/iranextunnel/*.conf; do
+    [ -f "$config" ] || continue
+    source "$config"
+    SERVICE_NAME="irantunnel-${TUNNEL_NAME}.service"
+    if ! systemctl is-active --quiet "$SERVICE_NAME"; then
+        echo "[$(date)] Restarting $SERVICE_NAME" >> /var/log/iranextunnel/watchdog.log
+        systemctl restart "$SERVICE_NAME"
     fi
 done
-
-# بررسی اتصال شبکه
-if ! ping -c 1 -W 2 8.8.8.8 &>/dev/null; then
-    log "⚠️ Network seems down, restarting network service..."
-    systemctl restart networking
-fi
 EOF
 
     chmod +x "$WATCHDOG_SCRIPT"
     
-    # افزودن به cron برای اجرای هر دقیقه
-    crontab -l 2>/dev/null | grep -v "$WATCHDOG_SCRIPT" | crontab - 2>/dev/null
-    (crontab -l 2>/dev/null; echo "* * * * * $WATCHDOG_SCRIPT") | crontab -
+    # روش امن و بدون خطا برای افزودن به crontab
+    if ! crontab -l 2>/dev/null | grep -q "$WATCHDOG_SCRIPT"; then
+        (crontab -l 2>/dev/null; echo "* * * * * $WATCHDOG_SCRIPT") | crontab -
+    fi
     
-    log "INFO" "✅ Watchdog installed (runs every minute)"
+    log "INFO" "Watchdog installed successfully"
 }
 
 # ============================================
-# راه‌اندازی نهایی تانل
+# راه‌اندازی تانل
 # ============================================
 start_tunnel() {
     local tunnel_name=$1
-    
     log "STEP" "Starting tunnel: $tunnel_name"
     
-    # باز کردن پورت در فایروال
     source "$CONFIG_DIR/$tunnel_name.conf"
     setup_firewall "$LOCAL_PORT"
-    
-    # ایجاد سرویس
     create_systemd_service "$tunnel_name"
     
-    # فعال کردن و شروع
     systemctl daemon-reload
     systemctl enable "irantunnel-${tunnel_name}.service"
     systemctl start "irantunnel-${tunnel_name}.service"
     
     if systemctl is-active --quiet "irantunnel-${tunnel_name}.service"; then
-        log "INFO" "✅ Tunnel $tunnel_name started successfully!"
-        
         echo -e "\n${GREEN}════════════════════════════════════════════════════════════${NC}"
         echo -e "${GREEN}🎉 TUNNEL IS RUNNING!${NC}"
         echo -e "${GREEN}════════════════════════════════════════════════════════════${NC}"
@@ -492,11 +349,9 @@ start_tunnel() {
         echo -e "\n${WHITE}📊 Management Commands:${NC}"
         echo -e "   Status: ${YELLOW}systemctl status irantunnel-$tunnel_name${NC}"
         echo -e "   Stop: ${YELLOW}systemctl stop irantunnel-$tunnel_name${NC}"
-        echo -e "   Restart: ${YELLOW}systemctl restart irantunnel-$tunnel_name${NC}"
         echo -e "   Logs: ${YELLOW}journalctl -u irantunnel-$tunnel_name -f${NC}"
-        echo -e "   Watchdog: ${YELLOW}systemctl status irantunnel-watchdog${NC}"
         echo -e "${GREEN}════════════════════════════════════════════════════════════${NC}\n"
-        
+        log "INFO" "Tunnel $tunnel_name started successfully"
     else
         log "ERROR" "Failed to start tunnel $tunnel_name"
         return 1
@@ -504,33 +359,7 @@ start_tunnel() {
 }
 
 # ============================================
-# ایجاد سرویس watchdog systemd
-# ============================================
-create_watchdog_service() {
-    cat > /etc/systemd/system/irantunnel-watchdog.service << EOF
-[Unit]
-Description=IranExTunnel Watchdog Service
-After=network.target
-
-[Service]
-Type=simple
-ExecStart=$WATCHDOG_SCRIPT
-Restart=always
-RestartSec=30
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-    systemctl daemon-reload
-    systemctl enable irantunnel-watchdog.service
-    systemctl start irantunnel-watchdog.service
-    
-    log "INFO" "✅ Watchdog service created"
-}
-
-# ============================================
-# منوی مدیریت
+# منوی اصلی
 # ============================================
 show_menu() {
     echo -e "\n${CYAN}════════════════════════════════════════════════════════════${NC}"
@@ -543,15 +372,11 @@ show_menu() {
     echo -e "  ${GREEN}5)${NC} Restart a Tunnel"
     echo -e "  ${GREEN}6)${NC} View Logs"
     echo -e "  ${GREEN}7)${NC} Remove a Tunnel"
-    echo -e "  ${GREEN}8)${NC} Network Stats"
-    echo -e "  ${GREEN}9)${NC} Exit"
+    echo -e "  ${GREEN}8)${NC} Exit"
     echo -e "${CYAN}════════════════════════════════════════════════════════════${NC}"
-    read -p "👉 Select option [1-9]: " MENU_CHOICE
+    read -p "👉 Select option [1-8]: " MENU_CHOICE
 }
 
-# ============================================
-# نمایش وضعیت تانل‌ها
-# ============================================
 show_status() {
     echo -e "\n${BLUE}📊 Tunnels Status:${NC}"
     for config in "$CONFIG_DIR"/*.conf 2>/dev/null; do
@@ -567,76 +392,35 @@ show_status() {
 }
 
 # ============================================
-# نمایش آمار شبکه
-# ============================================
-show_network_stats() {
-    echo -e "\n${BLUE}📈 Network Statistics:${NC}"
-    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    
-    # پورت‌های باز
-    echo -e "${WHITE}Open ports:${NC}"
-    netstat -tlnp | grep -E "socat|websocat|chisel" | while read line; do
-        echo -e "   ${GREEN}$line${NC}"
-    done
-    
-    # ترافیک
-    echo -e "\n${WHITE}Active connections:${NC}"
-    ss -tn | grep -E ":(443|80|8080|8443)" | head -5
-    
-    # بار سیستم
-    echo -e "\n${WHITE}System load:${NC}"
-    uptime
-    
-    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-}
-
-# ============================================
 # اجرای اصلی
 # ============================================
 main() {
     print_banner
     check_root
     install_dependencies
-    
-    # ایجاد watchdog یکبار
-    create_watchdog
-    create_watchdog_service
+    install_watchdog
     
     while true; do
         show_menu
         case $MENU_CHOICE in
             1)
                 get_user_config
-                if [[ -f "$CONFIG_DIR/$TUNNEL_NAME.conf" ]]; then
-                    start_tunnel "$TUNNEL_NAME"
-                fi
+                start_tunnel "$TUNNEL_NAME"
                 ;;
             2)
                 echo -e "\n${BLUE}📋 Configured Tunnels:${NC}"
-                ls -1 "$CONFIG_DIR"/*.conf 2>/dev/null | sed 's/.*\///' | sed 's/.conf//' || echo -e "${YELLOW}   No tunnels configured${NC}"
+                ls -1 "$CONFIG_DIR"/*.conf 2>/dev/null | sed 's/.*\///' | sed 's/.conf//' || echo "   No tunnels configured"
                 ;;
-            3)
-                show_status
-                ;;
+            3) show_status ;;
             4)
                 show_status
-                echo ""
-                read -p "👉 Enter tunnel name to stop: " TUNNEL_TO_STOP
-                if systemctl stop "irantunnel-${TUNNEL_TO_STOP}.service" 2>/dev/null; then
-                    log "INFO" "Tunnel $TUNNEL_TO_STOP stopped"
-                else
-                    log "ERROR" "Tunnel not found"
-                fi
+                read -p "👉 Enter tunnel name to stop: " TUNNEL_NAME
+                systemctl stop "irantunnel-${TUNNEL_NAME}.service" 2>/dev/null && log "INFO" "Stopped $TUNNEL_NAME"
                 ;;
             5)
                 show_status
-                echo ""
-                read -p "👉 Enter tunnel name to restart: " TUNNEL_TO_RESTART
-                if systemctl restart "irantunnel-${TUNNEL_TO_RESTART}.service" 2>/dev/null; then
-                    log "INFO" "Tunnel $TUNNEL_TO_RESTART restarted"
-                else
-                    log "ERROR" "Tunnel not found"
-                fi
+                read -p "👉 Enter tunnel name to restart: " TUNNEL_NAME
+                systemctl restart "irantunnel-${TUNNEL_NAME}.service" 2>/dev/null && log "INFO" "Restarted $TUNNEL_NAME"
                 ;;
             6)
                 echo -e "\n${BLUE}📄 Recent logs:${NC}"
@@ -644,25 +428,19 @@ main() {
                 ;;
             7)
                 show_status
-                echo ""
-                read -p "👉 Enter tunnel name to remove: " TUNNEL_TO_REMOVE
-                systemctl stop "irantunnel-${TUNNEL_TO_REMOVE}.service" 2>/dev/null
-                systemctl disable "irantunnel-${TUNNEL_TO_REMOVE}.service" 2>/dev/null
-                rm -f "/etc/systemd/system/irantunnel-${TUNNEL_TO_REMOVE}.service"
-                rm -f "$CONFIG_DIR/${TUNNEL_TO_REMOVE}.conf"
+                read -p "👉 Enter tunnel name to remove: " TUNNEL_NAME
+                systemctl stop "irantunnel-${TUNNEL_NAME}.service" 2>/dev/null
+                systemctl disable "irantunnel-${TUNNEL_NAME}.service" 2>/dev/null
+                rm -f "/etc/systemd/system/irantunnel-${TUNNEL_NAME}.service"
+                rm -f "$CONFIG_DIR/${TUNNEL_NAME}.conf"
                 systemctl daemon-reload
-                log "INFO" "Tunnel $TUNNEL_TO_REMOVE removed"
+                log "INFO" "Removed tunnel $TUNNEL_NAME"
                 ;;
-            8)
-                show_network_stats
-                ;;
-            9)
+            8) 
                 echo -e "${GREEN}👋 Goodbye!${NC}"
                 exit 0
                 ;;
-            *)
-                echo -e "${RED}Invalid option${NC}"
-                ;;
+            *) echo -e "${RED}Invalid option${NC}" ;;
         esac
         echo -e "\n${YELLOW}Press Enter to continue...${NC}"
         read
@@ -670,5 +448,4 @@ main() {
     done
 }
 
-# اجرا
 main "$@"
